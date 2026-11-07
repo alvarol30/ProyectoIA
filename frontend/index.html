@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ProyectoIA — Diagnóstico Foliar Agrícola</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+<div class="container">
+    <header class="header">
+        <div class="logo">
+            <i class="fa-solid fa-leaf"></i>
+            <span>Proyecto<strong>IA</strong></span>
+        </div>
+        <p class="subtitle">Clasificación inteligente y diagnóstico de patologías foliares</p>
+    </header>
+
+    <main class="main-content">
+        <!-- Zona de Subida de Imagen -->
+        <section class="card upload-card">
+            <h2><i class="fa-solid fa-cloud-arrow-up"></i> Cargar Imagen de Hoja</h2>
+            <div class="drop-zone" id="dropZone">
+                <i class="fa-solid fa-image drop-icon"></i>
+                <p>Arrastra y suelta la fotografía aquí o</p>
+                <label for="imageInput" class="btn btn-secondary">Seleccionar archivo</label>
+                <input type="file" id="imageInput" accept="image/jpeg, image/png, image/webp" hidden>
+                <small>Formatos soportados: JPG, PNG, WEBP</small>
+            </div>
+
+            <div class="preview-container hidden" id="previewContainer">
+                <img id="imagePreview" src="" alt="Vista previa de la hoja">
+                <button class="btn btn-outline" id="removeImgBtn">
+                    <i class="fa-solid fa-trash"></i> Cambiar imagen
+                </button>
+            </div>
+
+            <button class="btn btn-primary" id="analyzeBtn" disabled>
+                <i class="fa-solid fa-microscope"></i> Analizar Patología
+            </button>
+        </section>
+
+        <!-- Zona de Resultados -->
+        <section class="card results-card">
+            <h2><i class="fa-solid fa-square-poll-vertical"></i> Resultado del Diagnóstico</h2>
+
+            <div id="initialState" class="empty-state">
+                <i class="fa-solid fa-seedling"></i>
+                <p>Sube una imagen y presiona "Analizar" para obtener el diagnóstico del modelo de IA.</p>
+            </div>
+
+            <div id="loadingState" class="loading-state hidden">
+                <div class="spinner"></div>
+                <p>Procesando imagen con ResNet50...</p>
+            </div>
+
+            <div id="resultContent" class="result-content hidden">
+                <div class="badge-status" id="badgeStatus">
+                    <span id="cropName">-</span> — <span id="conditionName">-</span>
+                </div>
+
+                <div class="metric-box">
+                    <span class="metric-label">Nivel de Confianza</span>
+                    <div class="confidence-bar-container">
+                        <div class="confidence-bar" id="confidenceBar"></div>
+                    </div>
+                    <span class="confidence-text" id="confidenceText">0%</span>
+                </div>
+
+                <div class="top-predictions">
+                    <h3>Top 3 Diagnósticos Probables</h3>
+                    <ul id="topPredictionsList"></ul>
+                </div>
+            </div>
+        </section>
+    </main>
+</div>
+<script src="app.js"></script>
+</body>
+</html>
