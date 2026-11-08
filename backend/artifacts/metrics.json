@@ -1,0 +1,13 @@
+{
+  "model": "ResNet50",
+  "num_classes": 23,
+  "test_images": 230,
+  "accuracy": 0.9260869565217391,
+  "precision_macro": 0.9322810040201345,
+  "recall_macro": 0.9260869565217391,
+  "f1_macro": 0.9255819951132678,
+  "seed": 123,
+  "epochs": 10,
+  "batch_size": 32,
+  "image_size": 224
+}
