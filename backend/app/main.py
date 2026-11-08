@@ -13,7 +13,8 @@ from PIL import Image, UnidentifiedImageError
 from pydantic import BaseModel, Field
 from starlette.concurrency import run_in_threadpool
 
-from app.config import ALLOWED_ORIGINS, MAX_IMAGE_SIZE_BYTES, MAX_IMAGE_SIZE_MB, MODEL_NAME
+# Se eliminó ALLOWED_ORIGINS ya que los orígenes se definen directamente en el middleware
+from app.config import MAX_IMAGE_SIZE_BYTES, MAX_IMAGE_SIZE_MB, MODEL_NAME
 from app.predictor import ModelNotReadyError, predictor
 
 logging.basicConfig(level=logging.INFO)
@@ -53,11 +54,12 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+# Configuración CORS corregida para permitir las peticiones del frontend local
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=ALLOWED_ORIGINS,
-    allow_credentials=False,
-    allow_methods=["GET", "POST"],
+    allow_origins=["http://127.0.0.1:5500", "http://localhost:5500"],
+    allow_credentials=True,
+    allow_methods=["*"],
     allow_headers=["*"],
 )
 
@@ -84,7 +86,7 @@ def health() -> dict:
 
 @app.post("/predict", response_model=PredictionResponse, tags=["Predicción"])
 async def predict_image(
-    file: Annotated[UploadFile, File(description="Imagen de una hoja: JPEG, PNG o WEBP")],
+        file: Annotated[UploadFile, File(description="Imagen de una hoja: JPEG, PNG o WEBP")],
 ) -> PredictionResponse:
     content = await file.read(MAX_IMAGE_SIZE_BYTES + 1)
     await file.close()
