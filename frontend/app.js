@@ -66,6 +66,43 @@ removeImgBtn.addEventListener('click', () => {
     resetResults();
 });
 
+// Diccionario completo de traducción para las 23 clases en español
+const translations = {
+    // Cultivos
+    "Apple": "Manzano",
+    "Corn (maize)": "Maíz",
+    "Corn_(maize)": "Maíz",
+    "Pepper, bell": "Pimiento morrón",
+    "Pepper,_bell": "Pimiento morrón",
+    "Potato": "Papa",
+    "Tomato": "Tomate",
+
+    // Patologías y estados
+    "Apple scab": "Roña del manzano",
+    "Black rot": "Podredumbre negra",
+    "Cedar apple rust": "Roya del cedro y del manzano",
+    "Cercospora leaf spot Gray leaf spot": "Mancha foliar por Cercospora y mancha gris",
+    "Common rust": "Roya común",
+    "Northern Leaf Blight": "Tizón norteño de la hoja",
+    "Bacterial spot": "Mancha bacteriana",
+    "Early blight": "Tizón temprano",
+    "Late blight": "Tizón tardío",
+    "Leaf Mold": "Moho de la hoja",
+    "Septoria leaf spot": "Mancha foliar por Septoria",
+    "Spider mites Two-spotted spider mite": "Ácaros / Arañuela roja",
+    "Target Spot": "Mancha en diana",
+    "Tomato Yellow Leaf Curl Virus": "Virus del rizado amarillo de la hoja",
+    "Tomato mosaic virus": "Virus del mosaico del tomate",
+    "healthy": "Sano (Sin patología detectada)"
+};
+
+// Función auxiliar para traducir y limpiar textos robustamente
+function translateText(text) {
+    if (!text) return "";
+    let clean = text.replace(/___/g, " ").replace(/_/g, " ").replace(/\(|\)/g, "").trim();
+    return translations[clean] || translations[text] || text;
+}
+
 function resetResults() {
     initialState.classList.remove('hidden');
     loadingState.classList.add('hidden');
@@ -99,23 +136,43 @@ analyzeBtn.addEventListener('click', async () => {
     }
 });
 
+// Función para renderizar los resultados traducidos en español sin duplicación
 function renderResults(data) {
     loadingState.classList.add('hidden');
     resultContent.classList.remove('hidden');
 
-    cropName.textContent = data.crop || 'Cultivo';
-    conditionName.textContent = (data.condition || data.class_name).replace(/_/g, ' ');
+    // Traducir cultivo y condición al español usando el diccionario
+    const cultivoEspanol = translateText(data.crop);
+    const condicionEspanol = translateText(data.condition || data.class_name);
+
+    // Separar correctamente el cultivo y la condición para evitar duplicados
+    if (cropName) {
+        cropName.textContent = cultivoEspanol;
+    }
+
+    if (conditionName) {
+        conditionName.textContent = condicionEspanol;
+    }
 
     const percentage = Math.round((data.confidence || 0) * 100);
     confidenceBar.style.width = `${percentage}%`;
     confidenceText.textContent = `${percentage}%`;
 
+    // Información del modelo de IA
+    const modelInfo = document.getElementById('modelInfo');
+    if (modelInfo) {
+        modelInfo.textContent = `Modelo: ${data.model} (23 clases)`;
+    }
+
+    // Renderizar Top 3 con nombres traducidos al español y cálculo corregido
     topPredictionsList.innerHTML = '';
     if (data.top_3 && Array.isArray(data.top_3)) {
         data.top_3.forEach((item) => {
             const li = document.createElement('li');
-            const perc = Math.round(item.confidence * 100);
-            li.innerHTML = `<span>${item.class_name.replace(/_/g, ' ')}</span><strong>${perc}%</strong>`;
+            const perc = Math.round((item.confidence || 0) * 100);
+            const nombreCultivoTop = translateText(item.crop);
+            const nombreClaseTop = translateText(item.condition || item.class_name);
+            li.innerHTML = `<span>${nombreCultivoTop} — ${nombreClaseTop}</span><strong>${perc}%</strong>`;
             topPredictionsList.appendChild(li);
         });
     }

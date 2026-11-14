@@ -66,9 +66,9 @@ class PlantDiseasePredictor:
                     class_names = json.load(file)
 
                 if (
-                    not isinstance(class_names, list)
-                    or not class_names
-                    or not all(isinstance(name, str) for name in class_names)
+                        not isinstance(class_names, list)
+                        or not class_names
+                        or not all(isinstance(name, str) for name in class_names)
                 ):
                     raise ValueError("class_names.json debe contener una lista de nombres.")
 
@@ -100,7 +100,7 @@ class PlantDiseasePredictor:
 
         tf = self._tf
         try:
-            # Se replica el flujo del Colab: RGB, resize 224x224 y rango [0, 1].
+            # Se normaliza al rango [0, 1] para evitar la saturación de confianza
             image = tf.io.decode_image(
                 image_bytes,
                 channels=3,
@@ -111,7 +111,6 @@ class PlantDiseasePredictor:
             image.set_shape([IMAGE_SIZE, IMAGE_SIZE, 3])
             batch = tf.expand_dims(image, axis=0)
 
-            # La propia arquitectura aplica Rescaling(255) y preprocess_input de ResNet50.
             with self._lock:
                 scores = self._model(batch, training=False).numpy()[0]
         except Exception as exc:
