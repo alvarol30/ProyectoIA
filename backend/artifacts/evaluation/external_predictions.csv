@@ -1,0 +1,6 @@
+﻿imagen;clase_real;prediccion;confianza;top3;correcta
+Apple___Apple_scab/images (3).jpg;Apple___Apple_scab;Apple___Apple_scab;77.9%;Apple___Apple_scab (77.9%) | Apple___healthy (9.4%) | Apple___Cedar_apple_rust (7.1%);True
+Corn_(maize)___Common_rust_/images (4).jpg;Corn_(maize)___Common_rust_;Corn_(maize)___Common_rust_;94.6%;Corn_(maize)___Common_rust_ (94.6%) | Corn_(maize)___Northern_Leaf_Blight (4.6%) | Corn_(maize)___Cercospora_leaf_spot Gray_leaf_spot (0.8%);True
+Potato___Late_blight/images (2).jpg;Potato___Late_blight;Potato___Early_blight;99.1%;Potato___Early_blight (99.1%) | Tomato___Early_blight (0.4%) | Tomato___Septoria_leaf_spot (0.4%);False
+Tomato___Late_blight/images.jpg;Tomato___Late_blight;Tomato___Late_blight;100.0%;Tomato___Late_blight (100.0%) | Corn_(maize)___healthy (0.0%) | Tomato___Leaf_Mold (0.0%);True
+Tomato___Target_Spot/images (1).jpg;Tomato___Target_Spot;Corn_(maize)___healthy;35.7%;Corn_(maize)___healthy (35.7%) | Pepper,_bell___Bacterial_spot (19.7%) | Tomato___Early_blight (12.7%);False

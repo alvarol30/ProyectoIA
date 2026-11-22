@@ -4,6 +4,16 @@ Ejemplo:
     python scripts/train_resnet.py --dataset-dir "D:/datos/plantvillage dataset"
 
 La carpeta indicada debe contener la subcarpeta `color` del dataset PlantVillage.
+
+Mejoras respecto a la versión anterior:
+  * más imágenes por clase (--max-per-class),
+  * aumento de datos dentro del modelo (solo actúa al entrenar),
+  * EarlyStopping: se queda con los mejores pesos, no con los de la última época,
+  * fine-tuning de las últimas capas de ResNet50 con learning rate bajo,
+  * métricas de train / validation / test e historial guardados en artifacts/.
+
+Prueba rápida (poco tiempo, sin fine-tuning):
+    python scripts/train_resnet.py --dataset-dir "..." --max-per-class 100 --epochs 5 --fine-tune-epochs 0
 """
 
 from __future__ import annotations
@@ -24,8 +34,10 @@ from tensorflow.keras import layers
 SEED = 123
 IMG_SIZE = 224
 BATCH_SIZE = 32
-MAX_PER_CLASS = 100
-EPOCHS = 10
+DEFAULT_MAX_PER_CLASS = 300      # antes: 100
+DEFAULT_EPOCHS = 15              # fase 1: solo la cabeza clasificadora
+DEFAULT_FINE_TUNE_EPOCHS = 10    # fase 2: últimas capas de ResNet50
+FINE_TUNE_LAYERS = 30
 IMAGE_EXTENSIONS = (".jpg", ".jpeg", ".png")
 CLASS_PREFIXES = (
     "Apple___",
@@ -49,20 +61,27 @@ def get_class_names(color_dir: Path) -> list[str]:
     )
 
 
-def collect_images(color_dir: Path, class_names: list[str]) -> tuple[np.ndarray, np.ndarray]:
+def collect_images(
+    color_dir: Path,
+    class_names: list[str],
+    max_per_class: int = DEFAULT_MAX_PER_CLASS,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Junta rutas y etiquetas. max_per_class <= 0 usa todas las imágenes."""
     file_paths: list[str] = []
     labels: list[int] = []
     rng = np.random.default_rng(SEED)
 
     for label_id, class_name in enumerate(class_names):
         class_dir = color_dir / class_name
-        images = [
+        # sorted() para que el orden sea el mismo en cualquier computadora
+        images = sorted(
             str(class_dir / filename)
             for filename in os.listdir(class_dir)
             if filename.lower().endswith(IMAGE_EXTENSIONS)
-        ]
+        )
         rng.shuffle(images)
-        images = images[:MAX_PER_CLASS]
+        if max_per_class > 0:
+            images = images[:max_per_class]
 
         if len(images) < 3:
             raise ValueError(
@@ -83,6 +102,7 @@ def split_dataset(
     file_paths: np.ndarray,
     labels: np.ndarray,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    """70% train, 20% validation, 10% test (estratificado)."""
     train_paths, temp_paths, train_labels, temp_labels = train_test_split(
         file_paths,
         labels,
@@ -91,8 +111,7 @@ def split_dataset(
         stratify=labels,
     )
 
-    # Se conserva el reparto final del notebook: 230 test y 460 validation
-    # cuando hay 2,300 imágenes (100 por cada una de las 23 clases).
+    # Mismo reparto del notebook: del 30% restante, 1/3 es test y 2/3 validation.
     test_paths, val_paths, test_labels, val_labels = train_test_split(
         temp_paths,
         temp_labels,
@@ -139,14 +158,19 @@ def make_dataset(
     return dataset.batch(BATCH_SIZE).prefetch(AUTOTUNE)
 
 
-def build_resnet50(num_classes: int) -> keras.Model:
+def build_resnet50(num_classes: int) -> tuple[keras.Model, keras.Model]:
     inputs = keras.Input(
         shape=(IMG_SIZE, IMG_SIZE, 3),
         name="imagen",
     )
 
+    # Aumento de datos: solo se aplica al entrenar, al predecir no hace nada.
+    x = layers.RandomFlip("horizontal_and_vertical")(inputs)
+    x = layers.RandomRotation(0.1)(x)
+    x = layers.RandomZoom(0.1)(x)
+
     # Mismo flujo del Colab: datos [0,1] -> Rescaling(255) -> preprocess_input.
-    x = layers.Rescaling(255.0)(inputs)
+    x = layers.Rescaling(255.0)(x)
     base = keras.applications.ResNet50(
         input_shape=(IMG_SIZE, IMG_SIZE, 3),
         include_top=False,
@@ -156,13 +180,49 @@ def build_resnet50(num_classes: int) -> keras.Model:
     base.trainable = False
     x = base(x, training=False)
     x = layers.GlobalAveragePooling2D()(x)
-    x = layers.Dropout(0.2)(x)
+    x = layers.Dropout(0.3)(x)
     outputs = layers.Dense(
         num_classes,
         activation="softmax",
         name="clasificacion",
     )(x)
-    return keras.Model(inputs=inputs, outputs=outputs, name="ResNet")
+    return keras.Model(inputs=inputs, outputs=outputs, name="ResNet"), base
+
+
+def compile_model(model: keras.Model, learning_rate: float) -> None:
+    model.compile(
+        optimizer=tf.keras.optimizers.Adam(learning_rate=learning_rate),
+        loss="sparse_categorical_crossentropy",
+        metrics=["accuracy"],
+    )
+
+
+def unfreeze_top_layers(base: keras.Model, n_layers: int) -> None:
+    """Descongela las últimas n capas de ResNet50 (sin tocar BatchNorm)."""
+    base.trainable = True
+    for layer in base.layers[:-n_layers]:
+        layer.trainable = False
+    for layer in base.layers:
+        if isinstance(layer, layers.BatchNormalization):
+            layer.trainable = False
+
+
+def make_callbacks() -> list[keras.callbacks.Callback]:
+    return [
+        keras.callbacks.EarlyStopping(
+            monitor="val_loss",
+            patience=3,
+            restore_best_weights=True,
+        )
+    ]
+
+
+def merge_histories(histories: list[keras.callbacks.History]) -> dict[str, list[float]]:
+    merged: dict[str, list[float]] = {}
+    for history in histories:
+        for key, values in history.history.items():
+            merged.setdefault(key, []).extend(float(v) for v in values)
+    return merged
 
 
 def main() -> None:
@@ -179,6 +239,19 @@ def main() -> None:
         default=Path(__file__).resolve().parents[1] / "artifacts",
         help="Carpeta de salida de modelo, clases y métricas.",
     )
+    parser.add_argument(
+        "--max-per-class",
+        type=int,
+        default=DEFAULT_MAX_PER_CLASS,
+        help="Imágenes máximas por clase (0 = todas).",
+    )
+    parser.add_argument("--epochs", type=int, default=DEFAULT_EPOCHS)
+    parser.add_argument(
+        "--fine-tune-epochs",
+        type=int,
+        default=DEFAULT_FINE_TUNE_EPOCHS,
+        help="Épocas de fine-tuning (0 = sin fine-tuning).",
+    )
     args = parser.parse_args()
 
     tf.keras.utils.set_random_seed(SEED)
@@ -193,7 +266,7 @@ def main() -> None:
             "Verifique que el dataset corresponda al utilizado por el proyecto."
         )
 
-    file_paths, labels = collect_images(color_dir, class_names)
+    file_paths, labels = collect_images(color_dir, class_names, args.max_per_class)
     (
         train_paths,
         train_labels,
@@ -217,18 +290,49 @@ def main() -> None:
     val_ds = make_dataset(val_paths, val_labels)
     test_ds = make_dataset(test_paths, test_labels)
 
-    model = build_resnet50(num_classes=len(class_names))
-    model.compile(
-        optimizer=tf.keras.optimizers.Adam(learning_rate=0.001),
-        loss="sparse_categorical_crossentropy",
-        metrics=["accuracy"],
-    )
+    model, base = build_resnet50(num_classes=len(class_names))
 
-    model.fit(
-        train_ds,
-        validation_data=val_ds,
-        epochs=EPOCHS,
-    )
+    # ---- Fase 1: entrenar solo la cabeza clasificadora ----
+    print("\n=== Fase 1: entrenando la cabeza clasificadora ===")
+    compile_model(model, learning_rate=1e-3)
+    histories = [
+        model.fit(
+            train_ds,
+            validation_data=val_ds,
+            epochs=args.epochs,
+            callbacks=make_callbacks(),
+        )
+    ]
+
+    # ---- Fase 2: fine-tuning de las últimas capas de ResNet50 ----
+    if args.fine_tune_epochs > 0:
+        best_weights = model.get_weights()
+        best_val_acc = model.evaluate(val_ds, verbose=0)[1]
+
+        print(f"\n=== Fase 2: fine-tuning de las últimas {FINE_TUNE_LAYERS} capas ===")
+        unfreeze_top_layers(base, FINE_TUNE_LAYERS)
+        compile_model(model, learning_rate=1e-5)
+        histories.append(
+            model.fit(
+                train_ds,
+                validation_data=val_ds,
+                epochs=args.fine_tune_epochs,
+                callbacks=make_callbacks(),
+            )
+        )
+
+        fine_tuned_val_acc = model.evaluate(val_ds, verbose=0)[1]
+        if fine_tuned_val_acc < best_val_acc:
+            print(
+                f"El fine-tuning no mejoró la validación "
+                f"({fine_tuned_val_acc:.4f} < {best_val_acc:.4f}); "
+                "se restauran los pesos de la fase 1."
+            )
+            model.set_weights(best_weights)
+
+    # ---- Evaluación final ----
+    train_accuracy = float(model.evaluate(train_ds, verbose=0)[1])
+    val_accuracy = float(model.evaluate(val_ds, verbose=0)[1])
 
     probabilities = model.predict(test_ds, verbose=0)
     predictions = np.argmax(probabilities, axis=1)
@@ -246,8 +350,13 @@ def main() -> None:
         "f1_macro": float(
             f1_score(test_labels, predictions, average="macro", zero_division=0)
         ),
+        "train_accuracy": train_accuracy,
+        "val_accuracy": val_accuracy,
         "seed": SEED,
-        "epochs": EPOCHS,
+        "epochs": args.epochs,
+        "fine_tune_epochs": args.fine_tune_epochs,
+        "max_per_class": args.max_per_class,
+        "total_images": int(len(file_paths)),
         "batch_size": BATCH_SIZE,
         "image_size": IMG_SIZE,
     }
@@ -255,6 +364,7 @@ def main() -> None:
     model_path = artifacts_dir / "resnet50.keras"
     class_names_path = artifacts_dir / "class_names.json"
     metrics_path = artifacts_dir / "metrics.json"
+    history_path = artifacts_dir / "history.json"
 
     model.save(model_path)
     class_names_path.write_text(
@@ -265,13 +375,20 @@ def main() -> None:
         json.dumps(metrics, ensure_ascii=False, indent=2),
         encoding="utf-8",
     )
+    history_path.write_text(
+        json.dumps(merge_histories(histories), indent=2),
+        encoding="utf-8",
+    )
 
+    print("\nPrecisión por conjunto (si train >> val/test hay sobreajuste):")
+    print(f"train: {train_accuracy * 100:.2f}% | val: {val_accuracy * 100:.2f}%")
     print("\nEvaluación en el conjunto de prueba:")
     for name in ("accuracy", "precision_macro", "recall_macro", "f1_macro"):
         print(f"{name}: {metrics[name] * 100:.2f}%")
     print(f"\nModelo guardado en: {model_path}")
     print(f"Clases guardadas en: {class_names_path}")
     print(f"Métricas guardadas en: {metrics_path}")
+    print(f"Historial guardado en: {history_path}")
 
 
 if __name__ == "__main__":
