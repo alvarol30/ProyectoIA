@@ -1,0 +1,36 @@
+ProyectoIA
+Comparación de ResNet50 con fotos de campo de papa
+
+Pregunta
+¿Equilibrar la muestra de papa de Tanzania mejora la clasificación de papa
+sana, tizón temprano y tizón tardío sin degradar el desempeño general?
+
+Comparaciones
+El candidato anterior es la referencia principal: obtuvo el mayor número
+de primeras predicciones correctas en las 122 fotos de PlantDoc. El modelo
+con campo anterior sirve para aislar el efecto de cambiar la muestra de papa.
+Se conservan las 23 salidas, la receta, la semilla, las particiones y las
+fotos de tomate. El ajuste del modelo usa validación de PlantVillage.
+
+Prueba reservada
+150 fotos de la carpeta Testing que publicaron los autores de PLD (Pakistán),
+50 por clase. El ZIP de prueba contiene el manifiesto y los SHA-256.
+Los identificadores de planta o vídeo no están confirmados. No se encontraron
+duplicados exactos ni pares con distancia dHash de 2 o menos. Eso no permite
+descartar dependencia entre tomas. El resultado se limita a esta colección.
+PlantDoc queda como comprobación exploratoria de las otras clases.
+
+Criterio fijado antes de entrenar el nuevo modelo
+Se considera mejora clara en esta prueba si la exactitud balanceada sube al
+menos 5 puntos porcentuales frente al candidato y el intervalo pareado del
+95 % por imagen queda por encima de cero. El intervalo supone independencia
+entre fotos y se interpreta con esa limitación. También se informan los
+aciertos y confusiones por clase, incluido cuántas hojas sanas se clasifican
+como tizón. En la misma prueba de PlantVillage de 5.901 imágenes, una caída
+de más de 1 punto de F1 macro frente al candidato impide recomendar el cambio.
+Si la evidencia es mixta, se mantiene la versión de la web. Una mejora en
+PLD no demuestra que funcione en campos de Perú ni fuera de las clases probadas.
+
+Fuentes
+PLD: https://doi.org/10.3390/electronics10172064
+Tanzania: https://doi.org/10.5281/zenodo.8286529

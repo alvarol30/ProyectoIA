@@ -33,10 +33,13 @@ ALLOWED_ORIGINS = [
     origin.strip()
     for origin in os.getenv(
         "ALLOWED_ORIGINS",
-        "http://localhost:3000,http://127.0.0.1:3000",
+        "http://localhost:3000,http://127.0.0.1:3000,"
+        "http://localhost:5500,http://127.0.0.1:5500",
     ).split(",")
     if origin.strip()
 ]
 
+MAX_BATCH_FILES = 10
+MAX_IMAGE_PIXELS = 25_000_000
 IMAGE_SIZE = 224
 MODEL_NAME = "ResNet50"

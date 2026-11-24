@@ -197,6 +197,7 @@ def main() -> None:
     parser.add_argument("--images-dir", type=Path, help="Carpeta con imágenes externas para probar.")
     parser.add_argument("--artifacts-dir", type=Path, default=ARTIFACTS_DIR)
     parser.add_argument("--model-path", type=Path, default=None)
+    parser.add_argument("--output-dir", type=Path, help="Directorio de salida de los informes.")
     parser.add_argument(
         "--max-per-class",
         type=int,
@@ -226,10 +227,10 @@ def main() -> None:
         else:
             max_per_class = DEFAULT_MAX_PER_CLASS
 
-    out_dir = artifacts_dir / "evaluation"
+    out_dir = args.output_dir or artifacts_dir / "evaluation"
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    model = keras.models.load_model(model_path)
+    model = keras.models.load_model(model_path, compile=False)
 
     if args.dataset_dir:
         evaluate_test_split(model, class_names, args.dataset_dir, max_per_class, out_dir)

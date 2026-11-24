@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import io
 import json
 import logging
 import threading
@@ -9,8 +10,11 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
+from PIL import Image
 
 from app.config import CLASS_NAMES_PATH, IMAGE_SIZE, MODEL_NAME, MODEL_PATH
+
+from app.labels import describe_class
 
 logger = logging.getLogger(__name__)
 
@@ -90,7 +94,11 @@ class PlantDiseasePredictor:
             self._class_names = class_names
             logger.info("%s cargado correctamente (%s clases).", MODEL_NAME, len(class_names))
 
-    def predict(self, image_bytes: bytes) -> dict[str, Any]:
+    def class_names(self) -> tuple[str, ...]:
+        self.load()
+        return tuple(self._class_names)
+
+    def predict(self, image_bytes: bytes, image_format: str = "") -> dict[str, Any]:
         """Procesa bytes de imagen y devuelve las tres predicciones principales."""
         if not self.is_loaded:
             self.load()
@@ -100,12 +108,13 @@ class PlantDiseasePredictor:
 
         tf = self._tf
         try:
-            # Se normaliza al rango [0, 1] para evitar la saturación de confianza
-            image = tf.io.decode_image(
-                image_bytes,
-                channels=3,
-                expand_animations=False,
-            )
+            if image_format == "WEBP":
+                with Image.open(io.BytesIO(image_bytes)) as source:
+                    image = tf.convert_to_tensor(np.asarray(source.convert("RGB")))
+            else:
+                image = tf.io.decode_image(
+                    image_bytes, channels=3, expand_animations=False
+                )
             image = tf.image.resize(image, [IMAGE_SIZE, IMAGE_SIZE])
             image = tf.cast(image, tf.float32) / 255.0
             image.set_shape([IMAGE_SIZE, IMAGE_SIZE, 3])
@@ -126,14 +135,8 @@ class PlantDiseasePredictor:
         top_predictions = []
         for index in top_indices:
             class_name = self._class_names[int(index)]
-            crop, separator, condition = class_name.partition("___")
             top_predictions.append(
-                {
-                    "class_name": class_name,
-                    "crop": crop,
-                    "condition": condition if separator else "",
-                    "confidence": float(scores[index]),
-                }
+                {**describe_class(class_name), "confidence": float(scores[index])}
             )
 
         best = top_predictions[0]
