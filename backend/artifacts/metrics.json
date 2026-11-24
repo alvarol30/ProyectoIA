@@ -1,0 +1,18 @@
+{
+  "model": "ResNet50",
+  "num_classes": 23,
+  "test_images": 673,
+  "accuracy": 0.9361069836552749,
+  "precision_macro": 0.9401323337079464,
+  "recall_macro": 0.936231884057971,
+  "f1_macro": 0.9365150569225876,
+  "train_accuracy": 0.969201385974884,
+  "val_accuracy": 0.9286775588989258,
+  "seed": 123,
+  "epochs": 15,
+  "fine_tune_epochs": 10,
+  "max_per_class": 300,
+  "total_images": 6727,
+  "batch_size": 32,
+  "image_size": 224
+}
